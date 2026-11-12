@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>John Woo — Resume Chat</title>
+<style>
+  :root { --bg: #0f172a; --panel: #1e293b; --accent: #38bdf8; --text: #e2e8f0; --muted: #94a3b8; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text);
+    display: flex; justify-content: center; min-height: 100vh;
+  }
+  .app { width: 100%; max-width: 720px; display: flex; flex-direction: column; height: 100vh; padding: 16px; }
+  header { padding: 8px 4px 16px; }
+  header h1 { font-size: 1.4rem; margin: 0; }
+  header p { color: var(--muted); margin: 4px 0 0; font-size: 0.9rem; }
+  #chat { flex: 1; overflow-y: auto; background: var(--panel); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 80%; padding: 10px 14px; border-radius: 10px; line-height: 1.4; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #00263a; }
+  .msg.assistant { align-self: flex-start; background: #334155; }
+  .cursor { display: inline-block; width: 8px; height: 1em; background: var(--muted); margin-left: 2px; vertical-align: text-bottom; animation: blink 0.7s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  form { display: flex; gap: 8px; margin-top: 12px; }
+  input[type=text] { flex: 1; padding: 12px; border-radius: 8px; border: none; background: var(--panel); color: var(--text); }
+  button { padding: 12px 18px; border-radius: 8px; border: none; background: var(--accent); color: #00263a; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Ask about John Woo</h1>
+    <p>Senior AI/ML, API, Integration Engineer — work experience &amp; technical skills</p>
+  </header>
+  <div id="chat"></div>
+  <form id="form">
+    <input id="input" type="text" placeholder="e.g. What's his RAG experience?" autocomplete="off" />
+    <button id="send" type="submit">Send</button>
+  </form>
+</div>
+<script>
+  const chatEl = document.getElementById('chat');
+  const formEl = document.getElementById('form');
+  const inputEl = document.getElementById('input');
+  const sendEl = document.getElementById('send');
+  const messages = [];
+
+  function addMessage(role, content = '') {
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.textContent = content;
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    return div;
+  }
+
+  addMessage('assistant', "Hi, I'm John Woo's resume assistant. Ask me about his work experience or technical skills.");
+
+  formEl.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+    sendEl.disabled = true;
+    messages.push({ role: 'user', content: text });
+    addMessage('user', text);
+
+    const replyEl = addMessage('assistant');
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    replyEl.appendChild(cursor);
+
+    let reply = '';
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Request failed');
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        reply += decoder.decode(value, { stream: true });
+        replyEl.textContent = reply;
+        replyEl.appendChild(cursor);
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }
+      messages.push({ role: 'assistant', content: reply });
+    } catch (err) {
+      replyEl.textContent = 'Error: ' + err.message;
+    } finally {
+      cursor.remove();
+      sendEl.disabled = false;
+      inputEl.focus();
+    }
+  });
+</script>
+</body>
+</html>
